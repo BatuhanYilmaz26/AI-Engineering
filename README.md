@@ -1,16 +1,19 @@
-# AI Engineering
+﻿# AI Engineering
 
-A multi-project workspace for AI engineering experiments and applications.
+A collection of AI engineering projects exploring language models, agents, research workflows, and interactive applications. Each project lives in its own top-level folder with its own source code, dependencies, and overview.
 
 ## Projects
 
-- `LangChain-Multi-Agent/` — LangChain-based multi-agent application.
+| Project | Overview |
+| --- | --- |
+| [LangChain Multi-Agent](LangChain-Multi-Agent/) | A Streamlit research assistant with search and reader agents, report generation, and editorial review. |
 
-## Repository conventions
+## Repository structure
 
-- Keep each project self-contained in its own top-level directory.
-- Put project-specific setup and usage instructions in that project's README.
-- Commit dependency manifests and lockfiles for reproducible builds.
-- Never commit credentials. Store local values in `.env` files and commit a corresponding `.env.example` containing placeholder values only.
-- Do not commit virtual environments, dependency folders, caches, generated builds, local databases, or large data artifacts.
+```text
+AI-Engineering/
+|-- LangChain-Multi-Agent/   # Multi-agent research application
+`-- README.md               # Project directory and repository overview
+```
 
+Additional projects will be organized alongside `LangChain-Multi-Agent/`, each with a dedicated README describing its purpose and structure.
