@@ -1,0 +1,10 @@
+langgraph
+langchain-openai
+langchain-groq
+python-dotenv
+pydantic
+langchain-google-genai
+langchain
+pandas
+litellm
+langchain-litellm
