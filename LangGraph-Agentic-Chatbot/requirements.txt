@@ -1,0 +1,20 @@
+# LangGraph & Checkpointers
+langgraph
+langgraph-checkpoint-sqlite
+
+# LangChain Ecosystem
+langchain
+langchain-core
+langchain-community
+langchain-openai
+langchain-text-splitters
+
+# Web Interface & Environment
+streamlit
+python-dotenv
+pydantic
+
+# RAG & Document Processing (for File 03)
+faiss-cpu
+sentence-transformers
+pypdf
