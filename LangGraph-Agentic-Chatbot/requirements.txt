@@ -14,7 +14,8 @@ streamlit
 python-dotenv
 pydantic
 
-# RAG & Document Processing (for File 03)
+# RAG, Embeddings & Document Processing
 faiss-cpu
 sentence-transformers
+torchvision
 pypdf
