@@ -70,10 +70,13 @@ Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-# Local databases and generated data
+# Local databases and SQLite runtime files
 *.db
+*.db-*
 *.sqlite
+*.sqlite-*
 *.sqlite3
+*.sqlite3-*
 *.parquet
 
 # Terraform and infrastructure secrets
