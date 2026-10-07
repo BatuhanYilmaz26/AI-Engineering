@@ -42,7 +42,7 @@ if not api_key:
     st.stop()
 
 # ============================================================================
-# 2. Local Free Embeddings & RAG Vector Store
+# 2. Local Free Embeddings & Safe Vector Store Access
 # ============================================================================
 @st.cache_resource(show_spinner=False)
 def get_embeddings():
@@ -50,12 +50,10 @@ def get_embeddings():
     return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 
-embeddings = get_embeddings()
-
-
 @st.cache_resource(show_spinner=False)
 def init_default_vectorstore():
-    """Builds a default knowledge base if no custom document is uploaded."""
+    """Builds a cached default knowledge base if no custom document is uploaded."""
+    emb = get_embeddings()
     default_docs = [
         Document(
             page_content=(
@@ -67,11 +65,15 @@ def init_default_vectorstore():
             metadata={"source": "corporate_policy_2026.txt"},
         )
     ]
-    return FAISS.from_documents(default_docs, embeddings)
+    return FAISS.from_documents(default_docs, emb)
 
 
-if "vectorstore" not in st.session_state:
-    st.session_state.vectorstore = init_default_vectorstore()
+def get_active_vectorstore():
+    """Safely returns the active vector store, falling back to default if uninitialized."""
+    if "vectorstore" not in st.session_state or st.session_state.vectorstore is None:
+        st.session_state.vectorstore = init_default_vectorstore()
+    return st.session_state.vectorstore
+
 
 # ============================================================================
 # 3. Define Tools (Safe Tools vs Sensitive HITL Tools)
@@ -119,11 +121,18 @@ def get_stock_quote(symbol: str) -> str:
 @tool
 def search_internal_documents(query: str) -> str:
     """Searches internal corporate documentation, research papers, and uploaded files."""
-    retriever = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 2})
-    matched = retriever.invoke(query)
-    if not matched:
-        return "No relevant sections found in the documents."
-    return "\n\n---\n\n".join(f"[{doc.metadata.get('source', 'Doc')}]: {doc.page_content.strip()}" for doc in matched)
+    try:
+        vs = get_active_vectorstore()
+        retriever = vs.as_retriever(search_kwargs={"k": 2})
+        matched = retriever.invoke(query)
+        if not matched:
+            return "No relevant sections found in the documents."
+        return "\n\n---\n\n".join(
+            f"[{doc.metadata.get('source', 'Doc')}]: {doc.page_content.strip()}"
+            for doc in matched
+        )
+    except Exception as err:
+        return f"Error querying knowledge base: {err}"
 
 
 @tool
@@ -131,7 +140,7 @@ def execute_stock_purchase(symbol: str, shares: int, max_budget_usd: float) -> s
     """SENSITIVE FINANCIAL TOOL: Executes a real-money equity stock order on behalf of the company.
     Always requires human supervisor approval before execution.
     """
-    total_est = shares * 150.0  # Estimated total calculation
+    total_est = shares * 150.0
     return (
         f"TRANSACTION COMPLETED: Successfully purchased {shares} shares of {symbol.upper()} "
         f"(Total Allocated: ${total_est:,.2f} USD within max budget of ${max_budget_usd:,.2f})."
@@ -188,7 +197,6 @@ def get_omni_agent():
     builder.add_conditional_edges("agent", tools_condition)
     builder.add_edge("tools", "agent")
 
-    # Halt execution before entering the tools node
     return builder.compile(checkpointer=checkpointer, interrupt_before=["tools"])
 
 
@@ -205,8 +213,10 @@ if "threads" not in st.session_state:
     st.session_state.threads = ["main-session"]
 if "current_thread" not in st.session_state:
     st.session_state.current_thread = "main-session"
+if "vectorstore" not in st.session_state:
+    st.session_state.vectorstore = init_default_vectorstore()
 
-# Sidebar: Thread Management & Document Upload
+# Sidebar: Thread Management & Document Ingestion
 with st.sidebar:
     st.header("🧵 Conversation Sessions")
     if st.button("➕ New Chat Session", use_container_width=True):
@@ -237,7 +247,7 @@ with st.sidebar:
                 docs = loader.load()
                 splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=80)
                 chunks = splitter.split_documents(docs)
-                st.session_state.vectorstore = FAISS.from_documents(chunks, embeddings)
+                st.session_state.vectorstore = FAISS.from_documents(chunks, get_embeddings())
                 st.success(f"Indexed {len(chunks)} chunks from {uploaded_doc.name}!")
             finally:
                 if os.path.exists(tmp_path):
@@ -251,18 +261,16 @@ current_config = {"configurable": {"thread_id": st.session_state.current_thread}
 snapshot = omni_agent.get_state(current_config)
 pending_interrupt = bool(snapshot.next and "tools" in snapshot.next)
 
-# If an interrupt occurred, inspect whether the tool is SAFE or SENSITIVE
 is_sensitive_call = False
 pending_calls = []
 
 if pending_interrupt:
     last_msg = snapshot.values["messages"][-1]
     pending_calls = getattr(last_msg, "tool_calls", [])
-    # Check if any requested tool is in our sensitive action list
     is_sensitive_call = any(call["name"] in SENSITIVE_TOOLS for call in pending_calls)
 
-    # AUTO-RESUME SAFE TOOLS: If all pending tools are safe (e.g. weather, math, RAG),
-    # resume automatically without bothering the human supervisor!
+    # AUTO-RESUME SAFE TOOLS: If all pending tools are safe (weather, math, RAG),
+    # resume automatically without waiting for supervisor action.
     if not is_sensitive_call and pending_calls:
         omni_agent.invoke(None, config=current_config)
         st.rerun()
@@ -323,7 +331,6 @@ if user_query and not (pending_interrupt and is_sensitive_call):
                 config=current_config,
             )
 
-        # Inspect any tool calls executed during this turn
         for msg in result["messages"]:
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 with st.expander("🛠️ Tool Invocations"):
